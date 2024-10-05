@@ -1,43 +1,35 @@
 import { Handler } from "aws-lambda";
-
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+
 // Initialization
 const ddbDocClient = createDDbDocClient();
+
 // Handler
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event) => {
   try {
     console.log("Event: ", JSON.stringify(event));
-    const parameters = event?.queryStringParameters;
-    const movieId = parameters ? parseInt(parameters.movieId) : undefined;
 
-    if (!movieId) {
-      return {
-        statusCode: 404,
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ Message: "Missing movie Id" }),
-      };
-    }
+    // Scan the DynamoDB table
     const commandOutput = await ddbDocClient.send(
-      new GetCommand({
+      new ScanCommand({
         TableName: process.env.TABLE_NAME,
-        Key: { id: movieId },
       })
     );
-    console.log('GetCommand response: ',commandOutput)
-    if (!commandOutput.Item) {
+
+    // Check if items were found
+    if (!commandOutput.Items || commandOutput.Items.length === 0) {
       return {
         statusCode: 404,
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ Message: "Invalid movie Id" }),
+        body: JSON.stringify({ Message: "No movies found" }),
       };
     }
+
     const body = {
-      data: commandOutput.Item,
+      data: commandOutput.Items, // Return the items found
     };
 
     // Return Response
@@ -49,13 +41,13 @@ export const handler: Handler = async (event, context) => {
       body: JSON.stringify(body),
     };
   } catch (error: any) {
-    console.log(JSON.stringify(error));
+    console.log("Error retrieving movies: ", JSON.stringify(error));
     return {
       statusCode: 500,
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({ error }),
+      body: JSON.stringify({ error: "Failed to retrieve movies" }),
     };
   }
 };
